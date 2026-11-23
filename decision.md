@@ -448,3 +448,15 @@ To publish on the **Google Play Store**: a developer account costs a one-time **
 ---
 
 *Next step: complete Phase 0, then come back and we can scaffold the project, database layer, and first screens together.*
+
+---
+
+## Decision log
+
+Changes to the original plan, made during development.
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-11-23 | **Plain SQL + hand-written migrations instead of Drizzle ORM** (sections 3 and 10 still mention Drizzle) | Drizzle with Expo needs extra Metro/Babel setup to bundle `.sql` migration files. With a small schema and a developer comfortable with SQL, plain SQL in repositories is simpler and easier to debug. Migrations are an ordered array versioned with `PRAGMA user_version` (`src/db/migrations.ts`). Drizzle can still be added later if queries get complex. |
+| 2026-11-23 | **No date-fns or Zustand yet** | The date helpers needed (`src/utils/dates.ts`) are small and fully tested; shared state so far is a single undo-delete snackbar. Add the libraries when they would save real effort. |
+| 2026-11-23 | **Screens live in `src/app/`**, not `app/` | This is the current Expo template layout; see the project structure in `README.md`. |
