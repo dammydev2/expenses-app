@@ -2,7 +2,7 @@
 
 An offline-first mobile app for logging daily spending and reviewing it month by month. Built with React Native (Expo) and SQLite. Android is the first target; iOS can follow from the same codebase.
 
-> **Status:** Phase 1 complete: database, migrations, and add/list/edit/delete expenses with month navigation. Next: Phase 2 (charts). See [Roadmap](#roadmap).
+> **Status:** Phase 2 complete: expense logging plus a monthly summary with a category donut, category breakdown and daily bar chart. Next: Phase 3 (month-end notification and close month). See [Roadmap](#roadmap).
 > For *why* the project uses this stack and design, see [`decision.md`](decision.md).
 
 ---
@@ -85,7 +85,7 @@ Income tracking and savings, cloud sync across devices, shared household budgets
 | Date picker | `@react-native-community/datetimepicker` |
 | Icons | `@expo/vector-icons` (MaterialCommunityIcons) |
 | Tests | Jest (`jest-expo`); repository tests use Node's built-in `node:sqlite` in memory |
-| Charts | [react-native-gifted-charts](https://gifted-charts.web.app) + react-native-svg *(to be added)* |
+| Charts | Hand-built with [react-native-svg](https://github.com/software-mansion/react-native-svg); geometry in `src/utils/chart-math.ts` (unit-tested) |
 | Notifications | [expo-notifications](https://docs.expo.dev/versions/latest/sdk/notifications/) (local, scheduled) *(to be added)* |
 | Dates | Small local helpers in `src/utils/dates.ts` (no library needed so far) |
 | State | React state + a tiny `useSyncExternalStore` store; Zustand if it grows |
@@ -162,16 +162,24 @@ Full SQL definitions and the report queries are in [`decision.md` § 7](decision
 
 ## Reports and charts
 
-| Chart | Data | Notes |
+The **Summary** screen (`src/app/summary.tsx`) opens from the chart icon in the home header or by tapping the month total.
+
+| Element | Data | Notes |
 |---|---|---|
-| Donut by category | `SUM(amount_cents) GROUP BY category_id` for the month | Top 5–6 categories, the rest grouped as "Other"; month total shown in the centre |
-| Bar per day | `SUM(amount_cents) GROUP BY spent_on` for the month | Days with no spending shown as 0 |
-| Bar per month | `SUM(amount_cents) GROUP BY substr(spent_on,1,7)` for the last 6–12 months | Trend view |
+| Hero total + KPIs | Month total; daily average (over days elapsed); biggest day | |
+| Donut by category | `categoryTotalsForMonth` → `foldCategories` | Up to **5 named slices + grey "Other"**; grey catch-all categories always go into Other. 2px gaps between slices. Tap a slice to show its amount in the centre |
+| Category breakdown | Every category: icon, name, amount, %, count, share bar | Doubles as the donut's legend and its table view. Tapping a row highlights its slice |
+| Bar per day | `dailyTotalsForMonth` → `fillDailyTotals` | Single series (blue), thin columns with rounded tops, hairline grid, clean € ticks. Tap or drag to read a day; defaults to showing the highest day. **Show table** lists every day with spending |
+| Bar per month *(later)* | `SUM(amount_cents) GROUP BY substr(spent_on,1,7)` for the last 6–12 months | Trend view |
 | Budget progress *(v2)* | Spent vs budget per category | Horizontal bars |
 
-Every chart is accompanied by a list of the same numbers (category · amount · %). Colour is never the only way information is shown.
+### Colour rules
 
----
+- Category colours come from a **validated colour-blind-safe palette** (`src/constants/chart-palette.ts`): 8 hues in a fixed order, checked for colour-blind separation, normal-vision separation and contrast on the app's light (#fff) and dark (#000) backgrounds. Dark mode uses its own step of each hue.
+- **A colour belongs to the category, not its rank**: Groceries is blue in every month and every chart.
+- There are 10 named categories but only 8 hues, so Shopping/Entertainment and Rent/Subscriptions share a hue. Their **icons** tell them apart, and the donut never relies on colour alone: the breakdown list always shows names and amounts.
+- Text is never drawn in a category colour; colour appears only on marks (slices, icons, bars).
+- Stored category colours are the light-mode hex; render them with `categoryColor(hex, scheme)`.
 
 ## Month close and notifications
 
@@ -207,24 +215,25 @@ expense-tracker/
 │   │   ├── index.tsx             # Home: month switcher, total, expenses grouped by day, + button
 │   │   ├── expense/new.tsx       # Add expense
 │   │   ├── expense/[id].tsx      # Edit / delete expense
-│   │   ├── summary.tsx           # Charts for the selected month             (planned)
+│   │   ├── summary.tsx           # Monthly summary: donut, breakdown, daily bars
 │   │   ├── review/[month].tsx    # Month review + close                      (planned)
 │   │   ├── categories.tsx        # Manage categories                         (planned)
 │   │   └── settings.tsx          #                                            (planned)
 │   ├── components/               # expense-form, expense-row, month-switcher,
-│   │                             # category-icon, snackbar, themed-text/view
-│   ├── constants/theme.ts        # Colours (light/dark), spacing
+│   │   │                         # category-icon, snackbar, themed-text/view
+│   │   └── charts/               # donut-chart, daily-bar-chart, category-breakdown
+│   ├── constants/                # theme.ts (UI colours, spacing), chart-palette.ts
 │   ├── db/
 │   │   ├── migrations.ts         # Versioned schema migrations (PRAGMA user_version)
 │   │   ├── seed.ts               # Default categories + settings
 │   │   ├── types.ts              # Category, Expense, ExpenseInput…
-│   │   ├── repos/                # categories.ts, expenses.ts: ALL SQL lives here
+│   │   ├── repos/                # categories.ts, expenses.ts, reports.ts: ALL SQL lives here
 │   │   └── __tests__/            # Repository + migration tests (real SQL, in memory)
-│   ├── hooks/                    # use-month-expenses, use-theme, use-color-scheme
+│   ├── hooks/                    # use-month-expenses, use-month-report, use-theme, …
 │   ├── services/                 # notifications, export, month close          (planned)
 │   ├── stores/                   # undo-delete.ts
 │   ├── test-utils/               # In-memory SQLite adapter for Jest
-│   └── utils/                    # money.ts, dates.ts (+ __tests__)
+│   └── utils/                    # money.ts, dates.ts, chart-math.ts (+ __tests__)
 ├── assets/                       # Icons, splash
 ├── app.json                      # Expo config (name, icons, plugins)
 ├── package.json
@@ -323,7 +332,7 @@ Before publishing on Google Play, you'll need a developer account (one-time fee)
 
 ## Testing
 
-- **Unit tests (Jest)** for `money.ts`, `dates.ts`, and the report aggregations. Most of the bugs that matter will be in these.
+- **Unit tests (Jest)** for `money.ts`, `dates.ts`, `chart-math.ts` (slices, axis ticks, SVG paths), and the report aggregations. Most of the bugs that matter will be in these.
 - **Repository tests** run the real migrations and SQL against an in-memory SQLite database (Node's `node:sqlite`, wrapped to look like expo-sqlite in `src/test-utils/test-db.ts`).
 - **Manual checklist** before each release: add, edit and delete an expense; switch months; close and unlock a month; receive the notification; export and re-import a backup.
 
@@ -335,8 +344,8 @@ Before publishing on Google Play, you'll need a developer account (one-time fee)
 |---|---|---|
 | 0 | Project setup (Expo, TypeScript, expo-router) | ✅ Done |
 | 1 | Database layer, migrations, seed categories; add/list/edit/delete expenses; month navigation | ✅ Done |
-| 2 | Summary screen: donut chart, daily bar chart, category breakdown | ⏳ Next |
-| 3 | Month-end notification, review screen, close/lock month | |
+| 2 | Summary screen: donut chart, daily bar chart, category breakdown | ✅ Done |
+| 3 | Month-end notification, review screen, close/lock month | ⏳ Next |
 | 4 | CSV/JSON export, backup restore | |
 | 5 | Use the app for a full month; collect issues | |
 | 6 | v2: budgets, recurring expenses, daily reminder, comparisons, search | |

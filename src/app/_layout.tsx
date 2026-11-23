@@ -51,6 +51,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ title: 'Expenses' }} />
           <Stack.Screen name="expense/new" options={{ title: 'Add expense' }} />
           <Stack.Screen name="expense/[id]" options={{ title: 'Edit expense' }} />
+          <Stack.Screen name="summary" options={{ title: 'Summary' }} />
         </Stack>
       </SQLiteProvider>
     </ThemeProvider>

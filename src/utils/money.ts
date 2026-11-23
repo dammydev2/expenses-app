@@ -54,6 +54,32 @@ export function formatCents(cents: number, currency = DEFAULT_CURRENCY, locale?:
   return getFormatter(currency, locale).format(cents / 100);
 }
 
+const wholeFormatters = new Map<string, Intl.NumberFormat>();
+
+/**
+ * Whole-currency label for chart axes: 5000 → "€50", 1_250_000 → "€12.5K".
+ * Axis ticks are always whole amounts, so cents are dropped.
+ */
+export function formatAxisAmount(cents: number, currency = DEFAULT_CURRENCY, locale?: string): string {
+  const key = `${locale ?? ''}|${currency}`;
+  let formatter = wholeFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+    wholeFormatters.set(key, formatter);
+  }
+  const whole = cents / 100;
+  if (Math.abs(whole) >= 10_000) {
+    const thousands = Math.round(whole / 100) / 10; // one decimal
+    return formatter.format(0).replace(/0/, `${thousands}K`);
+  }
+  return formatter.format(Math.round(whole));
+}
+
 /** The currency symbol on its own, e.g. "€". */
 export function currencySymbol(currency = DEFAULT_CURRENCY, locale?: string): string {
   return getFormatter(currency, locale).format(0).replace(/[\d\s.,  ]/g, '') || currency;

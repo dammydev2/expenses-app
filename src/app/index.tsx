@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, SectionList, StyleSheet, View } from 'react-native';
@@ -55,6 +55,10 @@ export default function HomeScreen() {
     await reload();
   }
 
+  function openSummary() {
+    router.push({ pathname: '/summary', params: { month } });
+  }
+
   function addExpense() {
     router.push({ pathname: '/expense/new', params: { date: defaultDateForMonth(month) } });
   }
@@ -62,22 +66,46 @@ export default function HomeScreen() {
   const header = (
     <View style={styles.header}>
       <MonthSwitcher month={month} onChange={setMonth} />
-      <View style={[styles.totalCard, { backgroundColor: theme.backgroundElement }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Spent this month: ${formatCents(total)}, ${expenses.length} expenses. View summary`}
+        onPress={openSummary}
+        style={({ pressed }) => [
+          styles.totalCard,
+          { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement },
+        ]}>
         <ThemedText type="small" themeColor="textSecondary">
           Spent this month
         </ThemedText>
-        <ThemedText style={styles.totalAmount} accessibilityRole="summary">
-          {formatCents(total)}
-        </ThemedText>
+        <ThemedText style={styles.totalAmount}>{formatCents(total)}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {expenses.length === 1 ? '1 expense' : `${expenses.length} expenses`}
         </ThemedText>
-      </View>
+        <View style={styles.summaryLink}>
+          <ThemedText type="smallBold" style={{ color: theme.tint }}>
+            View summary
+          </ThemedText>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.tint} />
+        </View>
+      </Pressable>
     </View>
   );
 
   return (
     <View style={[styles.flex, { backgroundColor: theme.background }]}>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Monthly summary"
+              hitSlop={12}
+              onPress={openSummary}>
+              <MaterialCommunityIcons name="chart-donut" size={24} color={theme.text} />
+            </Pressable>
+          ),
+        }}
+      />
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -156,6 +184,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.four,
     borderRadius: Spacing.three,
+  },
+  summaryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.two,
   },
   totalAmount: {
     fontSize: 36,

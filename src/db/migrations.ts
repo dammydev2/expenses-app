@@ -51,6 +51,35 @@ export const migrations: Migration[] = [
     `);
     await seedDefaults(db);
   },
+
+  // v2: move default categories onto the validated colour-blind-safe chart palette.
+  // Only recolours a category whose colour is still the original v1 default,
+  // so a colour the user chose themselves is never overwritten.
+  async (db) => {
+    const recolor: [name: string, v1Color: string, newColor: string][] = [
+      ['Groceries', '#2E9E5B', '#2a78d6'],
+      ['Fuel / Car', '#E8590C', '#eb6834'],
+      ['Transport', '#1C7ED6', '#e34948'],
+      ['Rent', '#7048E8', '#6250d6'],
+      ['Utilities', '#F59F00', '#eda100'],
+      ['Eating out', '#D6336C', '#1baf7a'],
+      ['Health', '#0CA678', '#008300'],
+      ['Shopping', '#AE3EC9', '#e87ba4'],
+      ['Entertainment', '#4263EB', '#e87ba4'],
+      ['Subscriptions', '#1098AD', '#6250d6'],
+      ['Other', '#868E96', '#898781'],
+    ];
+    const now = new Date().toISOString();
+    for (const [name, v1Color, newColor] of recolor) {
+      await db.runAsync(
+        'UPDATE categories SET color = ?, updated_at = ? WHERE name = ? AND color = ?',
+        newColor,
+        now,
+        name,
+        v1Color,
+      );
+    }
+  },
 ];
 
 export const DATABASE_VERSION = migrations.length;
